@@ -2,6 +2,7 @@ package codes.rusty.cardscrapper;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -37,14 +38,14 @@ public class Server {
                 if (e.getMessage().equals("Address already in use: bind")) {
                     this.port++;
                 } else {
-                    if (Main.DEBUG) {
+                    if (Main.flags.isDebug()) {
                         e.printStackTrace();
                     }
                     System.out.println("Unable to start webserver! Exiting...");
                     System.exit(0);
                 }
             } catch (Exception e) {
-                if (Main.DEBUG) {
+                if (Main.flags.isDebug()) {
                     e.printStackTrace();
                 }
                 System.out.println("Unable to start webserver! Exiting...");
@@ -76,7 +77,7 @@ public class Server {
             stream.write(image);
             stream.close();
         } catch (Exception e) {
-            if (Main.DEBUG) {
+            if (Main.flags.isDebug()) {
                 e.printStackTrace();
             }
         }
@@ -89,7 +90,7 @@ public class Server {
         try {
             java.awt.Desktop.getDesktop().browse(new URI("http://duelingnetwork.com/?card_image_base=http://localhost:" + port + "/"));
         } catch (Exception e) {
-            if (Main.DEBUG) {
+            if (Main.flags.isDebug()) {
                 e.printStackTrace();
             }
             System.out.println("To view card art, please visit:");
@@ -107,21 +108,19 @@ public class Server {
         try {
             DataInputStream dis = new DataInputStream(new FileInputStream(file));
 
-            byte[] out = new byte[4096 * 32];
-            int index = 0;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[4096];
             int read = 0;
             int total = 0;
 
             while ((read = dis.read(buf)) != -1) {
-                System.arraycopy(buf, 0, out, index++ * 4096, read);
-                buf = new byte[4096];
+                out.write(buf);
                 total += read;
             }
 
-            return Arrays.copyOf(out, total);
+            return Arrays.copyOf(out.toByteArray(), total);
         } catch (Exception e) {
-            if (Main.DEBUG) {
+            if (Main.flags.isDebug()) {
                 e.printStackTrace();
             }
             System.out.println("Unable to load static cardart! Exiting...");

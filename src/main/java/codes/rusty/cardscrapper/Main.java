@@ -1,6 +1,9 @@
 package codes.rusty.cardscrapper;
 
+import java.awt.AlphaComposite;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.DataInputStream;
 import java.io.File;
@@ -19,37 +22,48 @@ import org.apache.commons.lang.StringEscapeUtils;
 
 public class Main {
 
-    public static final boolean DEBUG = false;
+    public static Flags flags;
 
     private static File ygoPro;
+    private static File hqFile;
     private static Connection dbCards;
     private static Map<Integer, String> dnIdMap;
 
     public static void main(String[] args) {
+        flags = new Flags(args);
+        flags.parse();
 
-        if (args.length < 1) {
-            System.out.println("Please provide an argument to execute the program!");
-            System.exit(0);
-        } else {
-            if (args[0].equalsIgnoreCase("--dump")) {
-                if (args.length < 2) {
-                    System.out.println("Please link to the DEVPro/YGOPro folder as an argument!");
-                    System.exit(0);
-                }
-
-                ygoPro = new File(args[1]);
-                if (!ygoPro.isDirectory()) {
-                    System.out.println("Please link to the DEVPro/YGOPro folder as an argument!");
-                    System.exit(0);
-                }
-
-                dumpCardList(); // Load DN ids and names into map
-                loadCardDB(); // Load DB from YGOPro
-                processCards(); // Crop and save the images YGOPro provides
-            } else if (args[0].equalsIgnoreCase("--run")) {
-                Server server = new Server();
-                server.run();
+        if (flags.getRunType() == Flags.RunType.DUMP) {
+            ygoPro = flags.getYgoProFile();
+            if (!ygoPro.isDirectory()) {
+                System.out.println("Please link to the DEVPro/YGOPro folder as an argument!");
+                System.exit(0);
             }
+
+            dumpCardList(); // Load DN ids and names into map
+            loadCardDB(); // Load DB from YGOPro
+            processCards(false); // Crop and save the images YGOPro provides
+        } else if (flags.getRunType() == Flags.RunType.SERVER) {
+            Server server = new Server();
+            server.run();
+        } else if (flags.getRunType() == Flags.RunType.HQ) {
+            ygoPro = flags.getYgoProFile();
+            if (!ygoPro.isDirectory()) {
+                System.out.println("Please link to the DEVPro/YGOPro folder as an argument!");
+                System.exit(0);
+            }
+
+            hqFile = flags.getHqFile();
+            if (!hqFile.isDirectory()) {
+                System.out.println("Please link to the HQ folder as an argument!");
+                System.exit(0);
+            }
+
+            dumpCardList(); // Load DN ids and names into map
+            loadCardDB(); // Load DB from YGOPro
+            processCards(true); // Crop and save the images YGOPro provides
+        } else {
+            System.out.println("Please provide a flag to run the program");
         }
     }
 
@@ -91,7 +105,7 @@ public class Main {
 
             System.out.println("Done");
         } catch (Exception e) {
-            if (DEBUG) {
+            if (flags.isDebug()) {
                 e.printStackTrace();
             }
             System.out.println("Unable to load DN card list!");
@@ -108,7 +122,7 @@ public class Main {
 
             System.out.println("Done");
         } catch (Exception e) {
-            if (DEBUG) {
+            if (flags.isDebug()) {
                 e.printStackTrace();
             }
             System.out.println("Unable to open database! Exiting...");
@@ -117,7 +131,7 @@ public class Main {
 
     }
 
-    public static void processCards() {
+    public static void processCards(boolean hq) {
         System.out.println("Creating card art... ");
 
         File logFile;
@@ -127,7 +141,7 @@ public class Main {
             logFile.createNewFile();
             logStream = new PrintStream(new FileOutputStream(logFile));
         } catch (Exception e) {
-            if (DEBUG) {
+            if (flags.isDebug()) {
                 e.printStackTrace();
             }
             logFile = null;
@@ -145,13 +159,13 @@ public class Main {
                     if (log != null) {
                         log.println("Unable to find card '" + name + "'");
                     }
-                    
+
                     return;
                 }
 
-                processImage(id, set.getInt("id"), set.getString("desc").startsWith("Pendulum"), log);
+                processImage(id, set.getInt("id"), set.getString("desc").startsWith("Pendulum"), log, hq);
             } catch (Exception e) {
-                if (DEBUG) {
+                if (flags.isDebug()) {
                     e.printStackTrace();
                 }
                 System.out.println("Unable to execute query! Exiting...");
@@ -160,40 +174,55 @@ public class Main {
         });
     }
 
-    public static void processImage(int dnId, int ypId, boolean pend, PrintStream log) {
+    public static void processImage(int dnId, int ypId, boolean pend, PrintStream log, boolean hq) {
         try {
-            File file = new File(ygoPro.getAbsoluteFile() + "/pics/" + ypId + ".jpg");
+            String pics = (!hq ? ygoPro.getAbsolutePath() + "/pics/" : hqFile.getAbsolutePath() + "/");
+            File file = new File(pics + ypId + ".jpg");
             BufferedImage image = ImageIO.read(file);
 
-            int x1, x2, y1, y2;
+            if (hq) {
+                BufferedImage cardImage = new BufferedImage(288, 288, BufferedImage.TYPE_4BYTE_ABGR);
+                Graphics2D g = cardImage.createGraphics();
+                g.setComposite(AlphaComposite.Src);
+                g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.drawImage(image, 0, 0, 288, 288, null);
+                g.dispose();
 
-            if (pend) {
-                x1 = 11;
-                x2 = 165;
-                y1 = 45;
-                y2 = 159;
-            } else if (image.getWidth() == 177) {
-                x1 = 24;
-                x2 = 152;
-                y1 = 55;
-                y2 = 181;
+                File out = new File("./cards/" + dnId + ".png");
+                out.getParentFile().mkdirs();
+                ImageIO.write(cardImage, "PNG", out);
             } else {
-                x1 = 22;
-                x2 = 151;
-                y1 = 48;
-                y2 = 177;
+                int x1, x2, y1, y2;
+
+                if (pend) {
+                    x1 = 11;
+                    x2 = 165;
+                    y1 = 45;
+                    y2 = 159;
+                } else if (image.getWidth() == 177) {
+                    x1 = 24;
+                    x2 = 152;
+                    y1 = 55;
+                    y2 = 181;
+                } else {
+                    x1 = 22;
+                    x2 = 151;
+                    y1 = 48;
+                    y2 = 177;
+                }
+                BufferedImage cardArt = new BufferedImage(x2 - x1, y2 - y1, BufferedImage.TYPE_4BYTE_ABGR);
+                Graphics g = cardArt.getGraphics();
+                g.drawImage(image, -x1, -y1, null);
+                g.dispose();
+
+                File out = new File("./cards/" + dnId + ".png");
+                out.getParentFile().mkdirs();
+                ImageIO.write(cardArt, "PNG", out);
             }
-
-            BufferedImage cardArt = new BufferedImage(x2 - x1, y2 - y1, BufferedImage.TYPE_4BYTE_ABGR);
-            Graphics g = cardArt.getGraphics();
-            g.drawImage(image, -x1, -y1, null);
-            g.dispose();
-
-            File out = new File("./cards/" + dnId + ".png");
-            out.getParentFile().mkdirs();
-            ImageIO.write(cardArt, "PNG", out);
         } catch (Exception e) {
-            if (DEBUG) {
+            if (flags.isDebug()) {
                 e.printStackTrace();
             }
             log.println("Unable to load image #" + ypId);

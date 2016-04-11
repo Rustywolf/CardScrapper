@@ -1,2 +1,13 @@
 # Netbeans
 
+.DS_STORE
+manifest.mf
+nbproject/
+build/
+dist/
+lib/
+plugins/
+dependency-reduced-pom.xml
+nbactions.xml
+/bin
+/target

@@ -118,6 +118,7 @@ public class Server {
                 total += read;
             }
 
+            dis.close();
             return Arrays.copyOf(out.toByteArray(), total);
         } catch (Exception e) {
             if (Main.flags.isDebug()) {

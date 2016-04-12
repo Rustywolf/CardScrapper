@@ -81,6 +81,7 @@ public class Main {
                 builder.append(new String(read == 4096 ? buf : Arrays.copyOf(buf, read)));
             }
 
+            dis.close();
             System.out.println("Done");
             System.out.print("Parsing DN card list... ");
 
@@ -163,7 +164,7 @@ public class Main {
                     return;
                 }
 
-                processImage(id, set.getInt("id"), set.getString("desc").startsWith("Pendulum"), log, hq);
+                processImage(id, set.getInt("id"), name, set.getString("desc").startsWith("Pendulum"), log, hq);
             } catch (Exception e) {
                 if (flags.isDebug()) {
                     e.printStackTrace();
@@ -174,7 +175,7 @@ public class Main {
         });
     }
 
-    public static void processImage(int dnId, int ypId, boolean pend, PrintStream log, boolean hq) {
+    public static void processImage(int dnId, int ypId, String name, boolean pend, PrintStream log, boolean hq) {
         try {
             String pics = (!hq ? ygoPro.getAbsolutePath() + "/pics/" : hqFile.getAbsolutePath() + "/");
             File file = new File(pics + ypId + ".jpg");
@@ -225,7 +226,7 @@ public class Main {
             if (flags.isDebug()) {
                 e.printStackTrace();
             }
-            log.println("Unable to load image #" + ypId);
+            log.println("Unable to load image #" + ypId + " (" + name + ")");
         }
 
     }
